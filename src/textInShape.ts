@@ -1,6 +1,6 @@
 import { prepareWithSegments, layoutNextLine, type PreparedTextWithSegments, type LayoutCursor } from '@chenglou/pretext'
 import type { Pt } from './chinaOutline'
-import { intervalsAtY, widestInterval } from './chinaOutline'
+import { intervalsAtY } from './chinaOutline'
 
 export type TextInShapeOptions = {
   font: string
@@ -27,21 +27,25 @@ export function drawChinaText(
   let y = polyBoundsTop(poly) + lineHeight * 0.85
   const yMax = polyBoundsBottom(poly) - 4
 
-  while (y < yMax) {
+  scanline: while (y < yMax) {
     const intervals = intervalsAtY(poly, y)
-    const span = widestInterval(intervals)
-    if (!span || span.right - span.left < minChordCssPx) {
+    const spans = intervals
+      .filter((s) => s.right - s.left >= minChordCssPx)
+      .sort((a, b) => a.left - b.left)
+    if (spans.length === 0) {
       y += lineHeight
       continue
     }
-    const maxWidth = Math.max(4, span.right - span.left - chordPadding * 2)
-    const line = layoutNextLine(prepared, cursor, maxWidth)
-    if (!line) break
+    for (const span of spans) {
+      const maxWidth = Math.max(4, span.right - span.left - chordPadding * 2)
+      const line = layoutNextLine(prepared, cursor, maxWidth)
+      if (!line) break scanline
 
-    const lineW = line.width
-    const x = span.left + chordPadding + Math.max(0, (maxWidth - lineW) / 2)
-    ctx.fillText(line.text, x, y)
-    cursor = line.end
+      const lineW = line.width
+      const x = span.left + chordPadding + Math.max(0, (maxWidth - lineW) / 2)
+      ctx.fillText(line.text, x, y)
+      cursor = line.end
+    }
     y += lineHeight
   }
 }
