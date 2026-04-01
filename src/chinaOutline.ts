@@ -202,6 +202,20 @@ export function widestInterval(intervals: Interval[]): Interval | null {
   return intervals.reduce((a, b) => (b.right - b.left > a.right - a.left ? b : a))
 }
 
+/** Remove `[blockL, blockR]` from each span (1D interval subtraction). */
+export function subtractIntervalFromSpans(spans: Interval[], blockL: number, blockR: number): Interval[] {
+  const out: Interval[] = []
+  for (const iv of spans) {
+    if (blockR <= iv.left || blockL >= iv.right) {
+      out.push(iv)
+      continue
+    }
+    if (blockL > iv.left) out.push({ left: iv.left, right: Math.min(iv.right, blockL) })
+    if (blockR < iv.right) out.push({ left: Math.max(iv.left, blockR), right: iv.right })
+  }
+  return out.filter((s) => s.right - s.left > 0.5)
+}
+
 /** Horizontal spans outside the polygon: complement of inside intervals within [0, canvasW]. */
 export function outsideIntervalsAtY(poly: Pt[], y: number, canvasW: number): Interval[] {
   const inside = intervalsAtY(poly, y)

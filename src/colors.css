@@ -31,6 +31,10 @@
   --color-text-on-canvas-gold-muted: #c8a078; /* pale gold */
   --color-text-on-canvas-gold-dark: #78643c; /* deep ochre */
 
+  /* Geo labels on map (canvas) — one color each category */
+  --color-map-label-city: #4a2d5c;
+  --color-map-label-nature: #2d5a4a;
+
   /* UI / outline — map fill is --color-bg-surface; stroke color used by canvas `strokePolygon` */
   --color-map-stroke: rgba(120, 60, 90, 0.55);
   --color-ui-panel-bg: rgba(14, 18, 32, 0.88);

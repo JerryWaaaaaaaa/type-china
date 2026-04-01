@@ -1,6 +1,6 @@
 import { prepareWithSegments, layoutNextLine, type PreparedTextWithSegments, type LayoutCursor } from '@chenglou/pretext'
 import type { Pt } from './chinaOutline'
-import { intervalsAtY, outsideIntervalsAtY } from './chinaOutline'
+import { intervalsAtY, outsideIntervalsAtY, subtractIntervalFromSpans } from './chinaOutline'
 
 export type TextInShapeOptions = {
   font: string
@@ -9,6 +9,31 @@ export type TextInShapeOptions = {
   minChordCssPx: number
   /** Cycle through these for each word (global order while drawing). */
   wordColors: string[]
+}
+
+/** Axis-aligned holes for Pretext filler (e.g. geo label bounds). */
+export type ExclusionRect = { left: number; right: number; top: number; bottom: number }
+
+/** Bounding box for `fillText` at alphabetic baseline `cy`, horizontally centered on `cx`. */
+export function measureLabelExclusionRect(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  font: string,
+  cx: number,
+  cy: number,
+  pad: number,
+): ExclusionRect {
+  ctx.font = font
+  const m = ctx.measureText(text)
+  const w = m.width
+  const asc = m.actualBoundingBoxAscent ?? 8
+  const desc = m.actualBoundingBoxDescent ?? 2
+  return {
+    left: cx - w / 2 - pad,
+    right: cx + w / 2 + pad,
+    top: cy - asc - pad,
+    bottom: cy + desc + pad,
+  }
 }
 
 
@@ -45,6 +70,7 @@ export function drawSurroundingText(
   canvasH: number,
   prepared: PreparedTextWithSegments,
   opts: TextInShapeOptions,
+  exclusionRects?: ExclusionRect[],
 ): void {
   const { font, lineHeight, chordPadding, minChordCssPx, wordColors } = opts
   ctx.font = font
@@ -56,7 +82,13 @@ export function drawSurroundingText(
   const yMax = canvasH - 4
 
   scanline: while (y < yMax) {
-    const intervals = outsideIntervalsAtY(poly, y, canvasW)
+    let intervals = outsideIntervalsAtY(poly, y, canvasW)
+    if (exclusionRects?.length) {
+      for (const r of exclusionRects) {
+        if (y < r.top || y > r.bottom) continue
+        intervals = subtractIntervalFromSpans(intervals, r.left, r.right)
+      }
+    }
     const spans = intervals
       .filter((s) => s.right - s.left >= minChordCssPx)
       .sort((a, b) => a.left - b.left)
@@ -83,6 +115,7 @@ export function drawChinaText(
   poly: Pt[],
   prepared: PreparedTextWithSegments,
   opts: TextInShapeOptions,
+  exclusionRects?: ExclusionRect[],
 ): void {
   const { font, lineHeight, chordPadding, minChordCssPx, wordColors } = opts
   ctx.font = font
@@ -94,7 +127,13 @@ export function drawChinaText(
   const yMax = polyBoundsBottom(poly) - 4
 
   scanline: while (y < yMax) {
-    const intervals = intervalsAtY(poly, y)
+    let intervals = intervalsAtY(poly, y)
+    if (exclusionRects?.length) {
+      for (const r of exclusionRects) {
+        if (y < r.top || y > r.bottom) continue
+        intervals = subtractIntervalFromSpans(intervals, r.left, r.right)
+      }
+    }
     const spans = intervals
       .filter((s) => s.right - s.left >= minChordCssPx)
       .sort((a, b) => a.left - b.left)

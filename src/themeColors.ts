@@ -6,6 +6,8 @@ export type ThemeColors = {
   textOnSurface: string[]
   textOnCanvas: string[]
   mapStroke: string
+  mapLabelCity: string
+  mapLabelNature: string
 }
 
 export function readThemeColors(): ThemeColors {
@@ -34,5 +36,7 @@ export function readThemeColors(): ThemeColors {
       v('--color-text-on-canvas-gold-dark'),
     ],
     mapStroke: v('--color-map-stroke') || 'rgba(120, 60, 90, 0.55)',
+    mapLabelCity: v('--color-map-label-city') || '#4a2d5c',
+    mapLabelNature: v('--color-map-label-nature') || '#2d5a4a',
   }
 }

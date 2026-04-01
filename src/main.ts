@@ -9,8 +9,26 @@ import {
   clipToPolygon,
   strokePolygon,
   fillPolygon,
+  measureLabelExclusionRect,
+  type ExclusionRect,
 } from './textInShape'
-import { MAP_BODY_TEXT, SURROUNDING_CITIES_TEXT } from './copy'
+import {
+  MAP_FILLER_TEXT,
+  MAJOR_CITIES,
+  NATURAL_FEATURES,
+  OUTSIDE_MAJOR_CITIES,
+  OUTSIDE_NATURAL_FEATURES,
+  SURROUNDING_CITIES_TEXT,
+} from './copy'
+import {
+  GEO_BOUNDS,
+  GEO_BOUNDS_VIEW,
+  lonLatToNormInBounds,
+  normGeoToFittedCanvas,
+  nudgeAnchorOutsidePolygon,
+  snapAnchorIntoPolygon,
+  viewportNormLonLatToPx,
+} from './mapGeo'
 import { readThemeColors } from './themeColors'
 import { loadSvgOutlinePoints, type SvgOutlineSampleOptions } from './mapShapeSvg'
 
@@ -18,6 +36,9 @@ const BASE_FONT_PX = 9
 const BASE_LINE_HEIGHT = 10
 const BASE_CHORD_PAD = 2
 const BASE_MIN_CHORD = 10
+/** Fixed CSS px for major city / natural geo labels (not tied to the Text size slider). */
+const LABEL_FONT_PX = 25
+const LABEL_PAD_PX = 6
 
 /**
  * Map tuning — bound to lil-gui sliders (`tuningState`).
@@ -27,7 +48,7 @@ const BASE_MIN_CHORD = 10
  * - mapStrokeWidth: Canvas stroke width in CSS pixels for the map outline (`strokePolygon`).
  * - svgMinSegments / svgMaxSegments / svgLengthDivisor: How `map.svg` path is sampled into points
  *   (see `SvgOutlineSampleOptions` in `mapShapeSvg.ts`). Changing these reloads the outline.
- * - fontScale: Map typography scale (Tanker).
+ * - fontScale: Typography scale for filler text inside the map and surrounding ring (Tanker). Geo labels use a fixed size.
  *
  * Colors: `--color-bg-surface` (fill inside map), `--color-map-stroke`, `--color-bg-canvas` in `colors.css`.
  */
@@ -116,7 +137,7 @@ const PREPARE_DEBOUNCE_MS = 110
 /** Fewer repeats = faster Pretext `prepare()`; still enough to fill the map at typical sizes. */
 const INNER_REPEAT = 42
 const OUTER_REPEAT = 28
-const TEXT_CORPUS = Array(INNER_REPEAT).fill(MAP_BODY_TEXT).join(' ')
+const TEXT_CORPUS = Array(INNER_REPEAT).fill(MAP_FILLER_TEXT).join(' ')
 const SURROUND_CORPUS = Array(OUTER_REPEAT).fill(SURROUNDING_CITIES_TEXT).join(' ')
 
 /** Canvas map text only — family stack from `colors.css` `--font-map` (Tanker). UI uses `--font-ui` (Geist) in CSS. */
@@ -141,6 +162,10 @@ function getTextMetrics(scale: number) {
     chordPadding,
     minChordCssPx,
   }
+}
+
+function getLabelFont(): string {
+  return `400 ${LABEL_FONT_PX}px ${getMapFontStack()}`
 }
 
 let preparedInner: ReturnType<typeof prepareWithSegments>
@@ -239,25 +264,95 @@ function renderFrame() {
   ctx.fillRect(0, 0, cssW, cssH)
 
   const m = getTextMetrics(tuningState.fontScale)
+  const labelFont = getLabelFont()
+
+  type GeoLabelKind = 'city' | 'nature'
+  const outsideLabelQueue: { text: string; cx: number; cy: number; kind: GeoLabelKind }[] = []
+  for (const L of OUTSIDE_MAJOR_CITIES) {
+    const p = viewportNormLonLatToPx(L.lon, L.lat, GEO_BOUNDS_VIEW, cssW, cssH, tuningState.padding)
+    const nudged = nudgeAnchorOutsidePolygon(
+      displayPoly,
+      p.x + panX,
+      p.y + panY,
+    )
+    outsideLabelQueue.push({ text: L.name, cx: nudged.x, cy: nudged.y, kind: 'city' })
+  }
+  for (const L of OUTSIDE_NATURAL_FEATURES) {
+    const p = viewportNormLonLatToPx(L.lon, L.lat, GEO_BOUNDS_VIEW, cssW, cssH, tuningState.padding)
+    const nudged = nudgeAnchorOutsidePolygon(
+      displayPoly,
+      p.x + panX,
+      p.y + panY,
+    )
+    outsideLabelQueue.push({ text: L.name, cx: nudged.x, cy: nudged.y, kind: 'nature' })
+  }
+
+  const outsideLabelExclusions: ExclusionRect[] = []
+  for (const d of outsideLabelQueue) {
+    outsideLabelExclusions.push(measureLabelExclusionRect(ctx, d.text, labelFont, d.cx, d.cy, LABEL_PAD_PX))
+  }
+
   drawSurroundingText(ctx, displayPoly, cssW, cssH, preparedOuter, {
     font: m.font,
     lineHeight: m.lineHeight,
     chordPadding: m.chordPadding,
     minChordCssPx: m.minChordCssPx,
     wordColors: theme.textOnCanvas,
-  })
+  }, outsideLabelExclusions)
 
   fillPolygon(ctx, displayPoly, theme.bgSurface)
 
   ctx.save()
+  ctx.font = labelFont
+  ctx.textBaseline = 'alphabetic'
+  for (const d of outsideLabelQueue) {
+    ctx.fillStyle = d.kind === 'city' ? theme.mapLabelCity : theme.mapLabelNature
+    const tw = ctx.measureText(d.text).width
+    ctx.fillText(d.text, d.cx - tw / 2, d.cy)
+  }
+  ctx.restore()
+
+  const insideLabelQueue: { text: string; cx: number; cy: number; kind: GeoLabelKind }[] = []
+  for (const L of MAJOR_CITIES) {
+    const { nx, ny } = lonLatToNormInBounds(L.lon, L.lat, GEO_BOUNDS)
+    const p = normGeoToFittedCanvas(nx, ny, outlineFromSvg, cssW, cssH, tuningState.padding)
+    const snapped = snapAnchorIntoPolygon(displayPoly, p.x + panX, p.y + panY)
+    insideLabelQueue.push({ text: L.name, cx: snapped.x, cy: snapped.y, kind: 'city' })
+  }
+  for (const L of NATURAL_FEATURES) {
+    const { nx, ny } = lonLatToNormInBounds(L.lon, L.lat, GEO_BOUNDS)
+    const p = normGeoToFittedCanvas(nx, ny, outlineFromSvg, cssW, cssH, tuningState.padding)
+    const snapped = snapAnchorIntoPolygon(displayPoly, p.x + panX, p.y + panY)
+    insideLabelQueue.push({ text: L.name, cx: snapped.x, cy: snapped.y, kind: 'nature' })
+  }
+
+  const labelExclusions: ExclusionRect[] = []
+  for (const d of insideLabelQueue) {
+    labelExclusions.push(measureLabelExclusionRect(ctx, d.text, labelFont, d.cx, d.cy, LABEL_PAD_PX))
+  }
+
+  ctx.save()
   clipToPolygon(ctx, displayPoly)
-  drawChinaText(ctx, displayPoly, preparedInner, {
-    font: m.font,
-    lineHeight: m.lineHeight,
-    chordPadding: m.chordPadding,
-    minChordCssPx: m.minChordCssPx,
-    wordColors: theme.textOnSurface,
-  })
+  drawChinaText(
+    ctx,
+    displayPoly,
+    preparedInner,
+    {
+      font: m.font,
+      lineHeight: m.lineHeight,
+      chordPadding: m.chordPadding,
+      minChordCssPx: m.minChordCssPx,
+      wordColors: theme.textOnSurface,
+    },
+    labelExclusions,
+  )
+  ctx.font = labelFont
+  ctx.textBaseline = 'alphabetic'
+  for (const d of insideLabelQueue) {
+    ctx.fillStyle = d.kind === 'city' ? theme.mapLabelCity : theme.mapLabelNature
+    const tw = ctx.measureText(d.text).width
+    ctx.fillText(d.text, d.cx - tw / 2, d.cy)
+  }
   ctx.restore()
 
   strokePolygon(ctx, displayPoly, theme.mapStroke, tuningState.mapStrokeWidth)
@@ -320,7 +415,7 @@ const TUNING_HINTS: Record<keyof TuningState, string> = {
   svgLengthDivisor:
     'Sample count is roughly path length ÷ this value (then clamped by min/max). Lower divisor = more points and a finer polygon. Performance: smaller divisors (more segments) increase CPU and memory for the outline and all text-in-shape work — the app gets slower as segment count goes up.',
   fontScale:
-    'Scale for map typography (Tanker): text clipped inside the outline and the surrounding ring. Performance: larger values mean bigger glyphs and more Pretext “prepare” work — higher scale slows text rebuilds and can make interaction feel heavier until layout finishes.',
+    'Scale for filler text inside the outline and the surrounding ring (Tanker). Major city and nature labels stay a fixed size. Performance: larger values mean bigger glyphs and more Pretext “prepare” work — higher scale slows text rebuilds and can make interaction feel heavier until layout finishes.',
 }
 
 function hintController(c: Controller, key: keyof TuningState): void {
