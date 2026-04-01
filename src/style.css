@@ -37,6 +37,12 @@ body {
 canvas {
   display: block;
   vertical-align: top;
+  cursor: grab;
+  touch-action: none;
+}
+
+body.is-dragging-map canvas {
+  cursor: grabbing;
 }
 
 /* lil-gui root is appended inside #app (see main.ts); position over canvas */

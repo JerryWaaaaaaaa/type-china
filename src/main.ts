@@ -160,6 +160,21 @@ const ctx = ctxRaw
 const root = document.querySelector<HTMLDivElement>('#app')!
 root.appendChild(canvas)
 
+/** Viewport pan (CSS px); map + text use the same offset via `displayPoly` in `renderFrame`. */
+let panX = 0
+let panY = 0
+
+type PanDragState = {
+  startClientX: number
+  startClientY: number
+  startPanX: number
+  startPanY: number
+  pointerId: number
+} | null
+
+let panDrag: PanDragState = null
+let panRenderScheduled = false
+
 let lastCssW = 0
 let lastCssH = 0
 let lastDpr = 0
@@ -218,12 +233,13 @@ function renderFrame() {
   const theme = readThemeColors()
   const { cssW, cssH } = sizeCanvas()
   const points = getSmoothedOutline(cssW, cssH)
+  const displayPoly = points.map((p) => ({ x: p.x + panX, y: p.y + panY }))
 
   ctx.fillStyle = theme.bgCanvas
   ctx.fillRect(0, 0, cssW, cssH)
 
   const m = getTextMetrics(tuningState.fontScale)
-  drawSurroundingText(ctx, points, cssW, cssH, preparedOuter, {
+  drawSurroundingText(ctx, displayPoly, cssW, cssH, preparedOuter, {
     font: m.font,
     lineHeight: m.lineHeight,
     chordPadding: m.chordPadding,
@@ -231,11 +247,11 @@ function renderFrame() {
     wordColors: theme.textOnCanvas,
   })
 
-  fillPolygon(ctx, points, theme.bgSurface)
+  fillPolygon(ctx, displayPoly, theme.bgSurface)
 
   ctx.save()
-  clipToPolygon(ctx, points)
-  drawChinaText(ctx, points, preparedInner, {
+  clipToPolygon(ctx, displayPoly)
+  drawChinaText(ctx, displayPoly, preparedInner, {
     font: m.font,
     lineHeight: m.lineHeight,
     chordPadding: m.chordPadding,
@@ -244,8 +260,51 @@ function renderFrame() {
   })
   ctx.restore()
 
-  strokePolygon(ctx, points, theme.mapStroke, tuningState.mapStrokeWidth)
+  strokePolygon(ctx, displayPoly, theme.mapStroke, tuningState.mapStrokeWidth)
 }
+
+function schedulePanRender(): void {
+  if (panRenderScheduled) return
+  panRenderScheduled = true
+  requestAnimationFrame(() => {
+    panRenderScheduled = false
+    renderFrame()
+  })
+}
+
+function endPanDrag(e: PointerEvent): void {
+  if (!panDrag || panDrag.pointerId !== e.pointerId) return
+  try {
+    canvas.releasePointerCapture(e.pointerId)
+  } catch {
+    /* already released */
+  }
+  panDrag = null
+  document.body.classList.remove('is-dragging-map')
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return
+  panDrag = {
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    startPanX: panX,
+    startPanY: panY,
+    pointerId: e.pointerId,
+  }
+  canvas.setPointerCapture(e.pointerId)
+  document.body.classList.add('is-dragging-map')
+})
+
+canvas.addEventListener('pointermove', (e) => {
+  if (!panDrag || panDrag.pointerId !== e.pointerId) return
+  panX = panDrag.startPanX + (e.clientX - panDrag.startClientX)
+  panY = panDrag.startPanY + (e.clientY - panDrag.startClientY)
+  schedulePanRender()
+})
+
+canvas.addEventListener('pointerup', endPanDrag)
+canvas.addEventListener('pointercancel', endPanDrag)
 
 const TUNING_HINTS: Record<keyof TuningState, string> = {
   padding:
