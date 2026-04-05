@@ -10,26 +10,22 @@
   --font-ui: 'Geist Sans', system-ui, sans-serif;
 
   /* Surface */
-  --color-bg-canvas: #f8f6f2;
+  --color-bg-canvas: #0d0c0a;
   --color-bg-surface: #F1E3E5;
 
   /* Text — on surface (inside map) */
-  --color-text-primary: #6b3d7a;
-  --color-text-secondary: #3c3c78;
-  --color-text-tertiary: #1e3c5a;
-  --color-text-accent: #783c5a;
-  --color-text-accent-muted: #b45a78;
-  --color-text-link: #3c5a96;
+  --color-text-primary: #e9e171; /* yellow */
+  --color-text-secondary: #9bbedd; /* light blue */
+  --color-text-tertiary: #fbc3c1; /* pink */
+  --color-text-accent: #f3f1f4; /* near-white */
 
   /* Text — on canvas (outside map) */
-  --color-text-on-canvas-primary: #19324b; /* dark teal-navy */
-  --color-text-on-canvas-secondary: #32324b; /* muted indigo */
-  --color-text-on-canvas-accent: #64324b; /* dark rose */
-  --color-text-on-canvas-subtle-green: #3c6450; /* muted forest green */
-  --color-text-on-canvas-green: #507864; /* medium sage green */
-  --color-text-on-canvas-gold: #a07850; /* warm gold */
-  --color-text-on-canvas-gold-muted: #c8a078; /* pale gold */
-  --color-text-on-canvas-gold-dark: #78643c; /* deep ochre */
+  --color-text-on-canvas-primary: #693b58; /* dark mauve */
+  --color-text-on-canvas-secondary: #364999; /* indigo */
+  --color-text-on-canvas-accent: #4b2a33; /* dark burgundy */
+  --color-text-on-canvas-subtle-green: #51675b; /* sage green */
+  --color-text-on-canvas-green: #745c80; /* purple */
+  --color-text-on-canvas-gold: #6b7581; /* slate blue-grey */
 
   /* Geo labels on map (canvas) — one color each category */
   --color-map-label-city: #4a2d5c;

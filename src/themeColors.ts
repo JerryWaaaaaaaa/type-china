@@ -22,8 +22,6 @@ export function readThemeColors(): ThemeColors {
       v('--color-text-secondary'),
       v('--color-text-tertiary'),
       v('--color-text-accent'),
-      v('--color-text-accent-muted'),
-      v('--color-text-link'),
     ],
     textOnCanvas: [
       v('--color-text-on-canvas-primary'),
@@ -32,8 +30,6 @@ export function readThemeColors(): ThemeColors {
       v('--color-text-on-canvas-subtle-green'),
       v('--color-text-on-canvas-green'),
       v('--color-text-on-canvas-gold'),
-      v('--color-text-on-canvas-gold-muted'),
-      v('--color-text-on-canvas-gold-dark'),
     ],
     mapStroke: v('--color-map-stroke') || 'rgba(120, 60, 90, 0.55)',
     mapLabelCity: v('--color-map-label-city') || '#4a2d5c',
