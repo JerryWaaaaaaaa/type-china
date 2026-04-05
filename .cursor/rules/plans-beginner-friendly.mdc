@@ -1,0 +1,14 @@
+---
+description: Always follow plans with a plain-English explanation
+alwaysApply: true
+---
+
+# Plans: Beginner-Friendly Explanations
+
+Whenever you present a plan (via CreatePlan or inline), follow the technical plan with a plain-English explanation that:
+
+- Avoids jargon — if a technical term is needed, define it in parentheses
+- Describes each step as "what it does", not "what the code is called"
+- Uses concrete analogies where helpful (e.g. "like a cookie-cutter", "like a newspaper wrapping text around a photo")
+- Keeps each step to 1–3 sentences
+- Ends with a one-line summary of which files change and why the change is contained

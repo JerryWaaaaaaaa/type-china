@@ -111,6 +111,14 @@ export function maskIsInside(mask: PngMask, t: MaskTransform, sx: number, sy: nu
   return isInside(mask, t, sx, sy)
 }
 
+/** True when the image pixel at (imgX, imgY) has alpha > 128. */
+export function imagePixelIsOpaque(mask: PngMask, imgX: number, imgY: number): boolean {
+  const px = Math.round(imgX)
+  const py = Math.round(imgY)
+  if (px < 0 || px >= mask.imgW || py < 0 || py >= mask.imgH) return false
+  return mask.data[(py * mask.imgW + px) * 4 + 3] > 128
+}
+
 function isInside(mask: PngMask, t: MaskTransform, sx: number, sy: number): boolean {
   const px = Math.round((sx - t.offsetX) / t.scale)
   const py = Math.round((sy - t.offsetY) / t.scale)
