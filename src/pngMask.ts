@@ -66,6 +66,46 @@ export function computeMaskTransform(
   }
 }
 
+/**
+ * Returns true if every pixel in the cell [cellX, cellX+cellW) × [cellY, cellY+cellH)
+ * is inside (black). Exits as soon as any white pixel is found.
+ */
+export function maskCellIsInside(
+  mask: PngMask,
+  t: MaskTransform,
+  cellX: number,
+  cellY: number,
+  cellW: number,
+  cellH: number,
+): boolean {
+  for (let dy = 0; dy < cellH; dy++) {
+    for (let dx = 0; dx < cellW; dx++) {
+      if (!isInside(mask, t, cellX + dx, cellY + dy)) return false
+    }
+  }
+  return true
+}
+
+/**
+ * Returns true if every pixel in the cell is outside (white).
+ * Exits as soon as any black pixel is found.
+ */
+export function maskCellIsOutside(
+  mask: PngMask,
+  t: MaskTransform,
+  cellX: number,
+  cellY: number,
+  cellW: number,
+  cellH: number,
+): boolean {
+  for (let dy = 0; dy < cellH; dy++) {
+    for (let dx = 0; dx < cellW; dx++) {
+      if (isInside(mask, t, cellX + dx, cellY + dy)) return false
+    }
+  }
+  return true
+}
+
 /** True when the screen coordinate (sx, sy) falls on a black pixel of the PNG. */
 export function maskIsInside(mask: PngMask, t: MaskTransform, sx: number, sy: number): boolean {
   return isInside(mask, t, sx, sy)

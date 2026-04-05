@@ -259,14 +259,15 @@ export type WordFillOptions = {
 }
 
 /**
- * Fill the shape defined by `insideAtY` with horizontal words, row by row.
- * Each word gets one color (cycling through `colors`). If a word exceeds the
- * remaining space in a span it is truncated to however many letters fit —
- * the word is still consumed so the next span starts fresh with the next word.
+ * Fill the shape with horizontal words, row by row.
+ * Uses a 2D cell checker: each character position (x, y) is only filled if
+ * `isCellActive(x, y)` returns true (the cell's full pixel block is inside).
+ * Words are truncated at span edges; color cycles once per word.
  */
 export function drawWordsInShape(
   ctx: CanvasRenderingContext2D,
-  insideAtY: (y: number) => Interval[],
+  isCellActive: (x: number, y: number) => boolean,
+  canvasW: number,
   canvasH: number,
   words: string[],
   opts: WordFillOptions,
@@ -277,35 +278,46 @@ export function drawWordsInShape(
   const charW = ctx.measureText('M').width
 
   let wordIdx = 0
-  let y = lineHeight * 0.85
+  let rowY = 0
 
-  while (y < canvasH) {
-    for (const span of insideAtY(y)) {
-      let x = span.left
-      while (x < span.right) {
-        const maxLetters = Math.floor((span.right - x) / charW)
-        if (maxLetters <= 0) break
-        const letters = words[wordIdx % words.length].slice(0, maxLetters)
-        ctx.fillStyle = colors[wordIdx % colors.length]
-        ctx.fillText(letters, x, y)
-        x += letters.length * charW
-        wordIdx++
+  while (rowY + lineHeight <= canvasH) {
+    const drawY = rowY + lineHeight * 0.85
+    let spanStart: number | null = null
+
+    for (let x = 0; x <= canvasW + charW; x += charW) {
+      const active = x < canvasW && isCellActive(x, rowY)
+      if (active && spanStart === null) {
+        spanStart = x
+      } else if (!active && spanStart !== null) {
+        let cx = spanStart
+        while (cx < x) {
+          const maxLetters = Math.floor((x - cx) / charW)
+          if (maxLetters <= 0) break
+          const letters = words[wordIdx % words.length].slice(0, maxLetters)
+          ctx.fillStyle = colors[wordIdx % colors.length]
+          ctx.fillText(letters, cx, drawY)
+          cx += letters.length * charW
+          wordIdx++
+        }
+        spanStart = null
       }
     }
-    y += lineHeight
+    rowY += lineHeight
   }
 }
 
 /**
- * Fill the spans returned by `spansAtX` with vertical words (rotated 90° CW,
- * reading top-to-bottom), column by column left-to-right.
- * Each word gets one color. Words are truncated to fit the remaining span height
- * so text always ends flush at the span boundary.
+ * Fill the outside of the shape with vertical words (rotated 90° CW, reading
+ * top-to-bottom), column by column left-to-right.
+ * Uses a 2D cell checker: each character position (colX, y) is only filled if
+ * `isCellActive(colX, y)` returns true (the cell's full pixel block is outside).
+ * Words are truncated at span edges; color cycles once per word.
  */
 export function drawWordsAroundShape(
   ctx: CanvasRenderingContext2D,
-  spansAtX: (x: number) => Interval[],
+  isCellActive: (x: number, y: number) => boolean,
   canvasW: number,
+  canvasH: number,
   words: string[],
   opts: WordFillOptions,
 ): void {
@@ -316,25 +328,33 @@ export function drawWordsAroundShape(
   const baselineOffset = lineHeight * 0.75
 
   let wordIdx = 0
-  let x = lineHeight * 0.85
+  let colX = lineHeight * 0.85
 
-  while (x < canvasW) {
-    for (const span of spansAtX(x)) {
-      let y = span.left
-      while (y < span.right) {
-        const maxLetters = Math.floor((span.right - y) / charW)
-        if (maxLetters <= 0) break
-        const letters = words[wordIdx % words.length].slice(0, maxLetters)
-        ctx.fillStyle = colors[wordIdx % colors.length]
-        ctx.save()
-        ctx.translate(x + baselineOffset, y)
-        ctx.rotate(Math.PI / 2)
-        ctx.fillText(letters, 0, 0)
-        ctx.restore()
-        y += letters.length * charW
-        wordIdx++
+  while (colX < canvasW) {
+    let spanStart: number | null = null
+
+    for (let y = 0; y <= canvasH + charW; y += charW) {
+      const active = y < canvasH && isCellActive(colX, y)
+      if (active && spanStart === null) {
+        spanStart = y
+      } else if (!active && spanStart !== null) {
+        let cy = spanStart
+        while (cy < y) {
+          const maxLetters = Math.floor((y - cy) / charW)
+          if (maxLetters <= 0) break
+          const letters = words[wordIdx % words.length].slice(0, maxLetters)
+          ctx.fillStyle = colors[wordIdx % colors.length]
+          ctx.save()
+          ctx.translate(colX + baselineOffset, cy)
+          ctx.rotate(Math.PI / 2)
+          ctx.fillText(letters, 0, 0)
+          ctx.restore()
+          cy += letters.length * charW
+          wordIdx++
+        }
+        spanStart = null
       }
     }
-    x += lineHeight
+    colX += lineHeight
   }
 }

@@ -5,8 +5,8 @@ import {
   type PngMask,
   loadPngMask,
   computeMaskTransform,
-  maskIntervalsAtY,
-  maskOutsideIntervalsAtX,
+  maskCellIsInside,
+  maskCellIsOutside,
 } from './pngMask'
 import { readThemeColors } from './themeColors'
 import { MAP_FILLER_TEXT, SURROUNDING_CITIES_TEXT } from './copy'
@@ -22,17 +22,19 @@ const OUTER_WORDS = Array(30).fill(SURROUNDING_CITIES_TEXT).join(' ').toUpperCas
 // ─── GUI Params ───────────────────────────────────────────────────────────────
 
 const params = {
-  fontSize:      9,
-  lineHeight:    10.5,
-  mapPadding:    40,
-  overlapBuffer: 1.0,
+  fontSize:        12,
+  lineHeight:      14,
+  mapPadding:      30,
+  charWScale:      1.45,
+  lineHeightScale: 1.6,
 }
 
 const gui = new GUI({ title: 'Text Controls' })
-gui.add(params, 'fontSize',      6,   18,  0.5).name('Font Size').onChange(renderFrame)
-gui.add(params, 'lineHeight',    7,   22,  0.5).name('Line Height').onChange(renderFrame)
-gui.add(params, 'mapPadding',    0,  120,  1  ).name('Map Padding').onChange(renderFrame)
-gui.add(params, 'overlapBuffer', 0,    3,  0.1).name('Overlap Buffer').onChange(renderFrame)
+gui.add(params, 'fontSize',        6,   18,  0.5 ).name('Font Size').onChange(renderFrame)
+gui.add(params, 'lineHeight',      7,   22,  0.5 ).name('Line Height').onChange(renderFrame)
+gui.add(params, 'mapPadding',      0,  120,  1   ).name('Map Padding').onChange(renderFrame)
+gui.add(params, 'charWScale',      0.5,  3,  0.05).name('Char Width Scale').onChange(renderFrame)
+gui.add(params, 'lineHeightScale', 0.5,  3,  0.05).name('Line Height Scale').onChange(renderFrame)
 
 // ─── DOM Structure ────────────────────────────────────────────────────────────
 
@@ -131,22 +133,31 @@ function renderFrame(): void {
   if (!mask) return
   const theme = readThemeColors()
   const { w, h } = sizeCanvas()
-  const { fontSize, lineHeight, mapPadding, overlapBuffer } = params
+  const { fontSize, lineHeight, mapPadding, charWScale, lineHeightScale } = params
   const fontSpec = `400 ${fontSize}px ${FONT_FAMILY}`
 
+  // Measure charW from the actual rendered font so detection stays in sync with rendering
+  ctx.font = fontSpec
+  const charW = ctx.measureText('M').width
+  const detW = charW * charWScale
+  const detH = lineHeight * lineHeightScale
+
   const transform = computeMaskTransform(mask.imgW, mask.imgH, w, h, mapPadding, panX, panY)
-  const insideAtY = (y: number) => maskIntervalsAtY(mask!, transform, y, w)
-  const spansAtX  = (x: number) => maskOutsideIntervalsAtX(mask!, transform, x, h, lineHeight * overlapBuffer)
+
+  // Inside: horizontal text footprint = charW wide × lineHeight tall
+  // Outside: vertical text footprint = lineHeight wide × charW tall (rotated 90°)
+  const isCellInside  = (x: number, y: number) => maskCellIsInside(mask!, transform, x, y, detW, detH)
+  const isCellOutside = (x: number, y: number) => maskCellIsOutside(mask!, transform, x, y, detH, detW)
 
   ctx.clearRect(0, 0, w, h)
 
-  drawWordsAroundShape(ctx, spansAtX, w, OUTER_WORDS, {
+  drawWordsAroundShape(ctx, isCellOutside, w, h, OUTER_WORDS, {
     font: fontSpec,
     lineHeight,
     colors: theme.textOnCanvas,
   })
 
-  drawWordsInShape(ctx, insideAtY, h, INNER_WORDS, {
+  drawWordsInShape(ctx, isCellInside, w, h, INNER_WORDS, {
     font: fontSpec,
     lineHeight,
     colors: theme.textOnSurface,
