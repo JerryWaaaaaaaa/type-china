@@ -358,7 +358,8 @@ export function drawWordsAroundShape(
   const baselineOffset = lineHeight * 0.75
 
   let wordIdx = 0
-  let colX = lineHeight * 0.85
+  // Start columns flush left; was lineHeight * 0.85 and left a visible empty strip.
+  let colX = -lineHeight * 0.5
 
   while (colX < canvasW) {
     let spanStart: number | null = null
