@@ -1,6 +1,8 @@
 import './style.css'
+import { inject } from '@vercel/analytics'
 import { startFaviconFrameCycle } from './faviconCycle'
 
+inject()
 startFaviconFrameCycle()
 import GUI from 'lil-gui'
 import { drawWordsInShape, drawWordsAroundShape, type WordHitBox } from './textInShape'
