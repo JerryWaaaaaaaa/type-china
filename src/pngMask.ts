@@ -36,6 +36,19 @@ export async function loadPngMask(url: string): Promise<PngMask> {
   return { data, imgW: img.naturalWidth, imgH: img.naturalHeight }
 }
 
+/** Uniform “fit entire mask in padded viewport” scale before zoom multiplier. */
+export function computeBaseFittedScale(
+  imgW: number,
+  imgH: number,
+  viewW: number,
+  viewH: number,
+  padding: number,
+): number {
+  const innerW = viewW - padding * 2
+  const innerH = viewH - padding * 2
+  return Math.min(innerW / imgW, innerH / imgH)
+}
+
 /**
  * Compute the scale + offset that maps the PNG image into the viewport with
  * uniform padding on all sides (same aspect-ratio-fit logic as the old
@@ -44,6 +57,8 @@ export async function loadPngMask(url: string): Promise<PngMask> {
  *
  *   px = (sx - transform.offsetX) / transform.scale
  *   py = (sy - transform.offsetY) / transform.scale
+ *
+ * `zoom` multiplies the fitted scale (1 = fit, >1 zoom in).
  */
 export function computeMaskTransform(
   imgW: number,
@@ -53,10 +68,12 @@ export function computeMaskTransform(
   padding: number,
   panX: number,
   panY: number,
+  zoom = 1,
 ): MaskTransform {
   const innerW = viewW - padding * 2
   const innerH = viewH - padding * 2
-  const scale = Math.min(innerW / imgW, innerH / imgH)
+  const base = Math.min(innerW / imgW, innerH / imgH)
+  const scale = base * zoom
   const baseOffsetX = padding + (innerW - imgW * scale) / 2
   const baseOffsetY = padding + (innerH - imgH * scale) / 2
   return {

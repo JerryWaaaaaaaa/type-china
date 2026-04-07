@@ -8,6 +8,10 @@
 
 ## Interaction
 - **Remove drag, pin images to geo-location** — strip `ImageDragState`, `imageDragState`, and the related pointer event logic; positions become fully derived from `LANDMARK_DEFS` coordinates every frame with no mutable `nx/ny` state
+- **Zoom in/out — "the more you zoom, the more you know"** — add pinch/scroll zoom so that zooming in reveals progressively more text (smaller font, tighter line height, or more text layers); the metaphor is discovery: the closer you look at China, the more detail and knowledge surfaces. Implementation ideas:
+  - Track a `zoomLevel` scalar (e.g. 1×–8×) driven by wheel and pinch-gesture events
+  - Scale `fontSize` and/or `lineHeight` inversely with zoom so more characters fit as you zoom in
+  - Optionally tier the visible text: at low zoom show only major place names; at high zoom reveal finer-grained content from `MAP_FILLER_TEXT`
 
 ## Visual quality
 - **Better image with more flexible outline** — current alpha-threshold check (`> 128`) gives a hard pixel-grid edge; options:
