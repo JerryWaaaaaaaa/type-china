@@ -1,4 +1,7 @@
 import './style.css'
+import { startFaviconFrameCycle } from './faviconCycle'
+
+startFaviconFrameCycle()
 import GUI from 'lil-gui'
 import { drawWordsInShape, drawWordsAroundShape, type WordHitBox } from './textInShape'
 import {
