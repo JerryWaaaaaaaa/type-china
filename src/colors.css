@@ -20,25 +20,6 @@
   --color-surface-4: #AAAAD9; /* lavender */
   --color-surface-5: #e7696c; /* coral */
 
-  /* Uncovered / not yet built — inner map only (Toronto cycling layer) */
-  --color-uncovered-street: #b4b2a9;
-
-  /* Bikeway tiers on inner map — CT / BL / SH (see type-toronto-build-plan.md) */
-  --color-tier-ct: #534ab7;
-  --color-tier-bl: #0f6e56;
-  --color-tier-sh: #ba7517;
-
-  /* Legend panel — tier accents + badge fills (pairs with tiers above) */
-  --color-legend-panel-bg: #f7f6f0;
-  --color-legend-track: #dcdcdc;
-  --color-legend-title: #111111;
-  --color-legend-subtitle: #6b6b6b;
-  --color-legend-badge-ct-bg: #d9d7f1;
-  --color-legend-badge-bl-bg: #c1e1d2;
-  --color-legend-badge-sh-bg: #f5d291;
-  --color-legend-badge-none-bg: #e4e4e4;
-  --color-legend-badge-none-text: #555555;
-
   /* Text — on canvas (outside map) */
   --color-canvas-1: #693b58; /* mauve */
   --color-canvas-2: #364999; /* indigo */

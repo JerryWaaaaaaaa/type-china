@@ -1,42 +1,20 @@
-# Next steps
+# Next Steps
 
-Items **not** implemented in the current slice (see plan / `type-toronto-build-plan.md` for context). Use this as a backlog when you extend the project.
+## Image sizing
+- **Change default aspect ratio** — current default `imgSizeRatio: 0.12` may need tuning once more images are added; consider also exposing a per-image override rather than a single global ratio
 
-## Map asset and geography
+## Content
+- **Produce more landmark images** — add more cut-out PNGs to `public/landmark-images/` and register them in the `LANDMARK_DEFS` array in `src/main.ts` with their lon/lat coordinates
 
-- Swap [`public/map-alpha.png`](public/map-alpha.png) for a Toronto (or study-area) silhouette when ready; update [`src/mapGeo.ts`](src/mapGeo.ts) bounds and any landmark positions if you keep geo-anchored images.
+## Interaction
+- **Remove drag, pin images to geo-location** — strip `ImageDragState`, `imageDragState`, and the related pointer event logic; positions become fully derived from `LANDMARK_DEFS` coordinates every frame with no mutable `nx/ny` state
+- **Zoom in/out — "the more you zoom, the more you know"** — add pinch/scroll zoom so that zooming in reveals progressively more text (smaller font, tighter line height, or more text layers); the metaphor is discovery: the closer you look at China, the more detail and knowledge surfaces. Implementation ideas:
+  - Track a `zoomLevel` scalar (e.g. 1×–8×) driven by wheel and pinch-gesture events
+  - Scale `fontSize` and/or `lineHeight` inversely with zoom so more characters fit as you zoom in
+  - Optionally tier the visible text: at low zoom show only major place names; at high zoom reveal finer-grained content from `MAP_FILLER_TEXT`
 
-## Neighbourhoods and interaction
-
-- Neighbourhood polygons, grouping, hover-to-focus one area, dimming other areas, and breakdown tooltips.
-- Optional raster “neighbourhood id” map or vector hit-testing for per-area interaction.
-
-## Zoom modes
-
-- Zoomed-out aggregate view (e.g. stacked CT / BL / SH with font-weight by density); current build is **zoom-in only** (street tokens + pan/zoom + word hover).
-
-## Visual and typography
-
-- Full Toronto tier colour system from the build plan (amber / teal / purple ramps) — current build reuses the existing surface palette plus [`--color-uncovered-street`](src/colors.css) only.
-- Variable-font weight encoding for tiers at low zoom.
-- Text labels aligned along road LineStrings (true geometry) instead of the grid fill.
-
-## Data and tooling
-
-- `scripts/processData` (or similar) pulling Toronto Open Data bikeways, optional OSM centre lines for grey canvas, and optional neighbourhood merge.
-- Ship [`public/data/streets.json`](public/data/) (and neighbourhoods file if/when needed) and replace [`src/streetSample.ts`](src/streetSample.ts).
-
-## Time and polish
-
-- Optional fade animation on year change (~400ms) for segments appearing/disappearing.
-- Performance: cull off-screen words or move to Canvas spatial indexing if counts grow very large.
-- Optional faint neighbourhood boundaries on hover.
-
-## Landmark photos on the map (paused)
-
-- Landmark PNGs, text cutouts, and hover tooltips are **off** by default. In [`src/main.ts`](src/main.ts), set **`LANDMARK_MAP_RENDER_ENABLED`** to `true` to load [`LANDMARK_DEFS`](src/main.ts) images again, draw them on the canvas, and restore the dev GUI “Landmark width” control.
-
-## Earlier prototype notes (Type China era)
-
-- Image sizing / per-landmark scale overrides if the landmark set grows.
-- Softer mask edge (alpha threshold, multi-sample cells) if the silhouette edge looks too harsh.
+## Visual quality
+- **Better image with more flexible outline** — current alpha-threshold check (`> 128`) gives a hard pixel-grid edge; options:
+  - Lower the threshold (e.g. `> 32`) to let semi-transparent edge pixels let text through, softening the wrap boundary
+  - Pre-process images to expand/erode the alpha mask by a few pixels for a looser or tighter hug
+  - Sample multiple points per cell (corners + center) instead of just the center for a more accurate per-character exclusion shape
