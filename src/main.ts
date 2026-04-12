@@ -17,20 +17,10 @@ import {
   imagePixelIsOpaque,
 } from './pngMask'
 import { readThemeColors } from './themeColors'
-import { SURROUNDING_CITIES_TEXT } from './copy'
+import { MAP_FILLER_TEXT, SURROUNDING_CITIES_TEXT } from './copy'
 import { GEO_BOUNDS } from './mapGeo'
-import {
-  STREET_SAMPLE,
-  NEIGHBOURHOOD_LABELS,
-  colorForStreetAtYear,
-  computeTierPercents,
-} from './streetSample'
-import { LEGEND_TIER_ROWS } from './legendTierInfo'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-/** Set `true` to load landmark PNGs, punch text holes, draw images, and landmark hover tooltips. */
-const LANDMARK_MAP_RENDER_ENABLED = false
 
 const FONT_FAMILY = "'Geist Mono', monospace"
 
@@ -132,21 +122,18 @@ function resolveNonOverlappingLandmarkIndices(rects: LandmarkRect[], priorities:
   return out.sort((a, b) => a - b)
 }
 
-// Inner map: cycling street names (tier/year colours via getWordColor); outer unchanged
-const INNER_WORDS = STREET_SAMPLE.map(s => s.name.toUpperCase())
+// Word arrays — color cycles once per word; truncation cuts within a word at span edges
+const INNER_WORDS = Array(50).fill(MAP_FILLER_TEXT).join(' ').toUpperCase().split(/\s+/).filter(Boolean)
 const OUTER_WORDS = Array(30).fill(SURROUNDING_CITIES_TEXT).join(' ').toUpperCase().split(/\s+/).filter(Boolean)
-
-/** Bikeways “as of” year for grey vs palette (2001–2025). */
-let selectedYear = 2025
 
 // ─── GUI Params ───────────────────────────────────────────────────────────────
 
 const params = {
   fontSize:        12,
   lineHeight:      14,
-  mapPadding:      120,
-  charWScale:      2.6,
-  lineHeightScale: 2.65,
+  mapPadding:      30,
+  charWScale:      1.45,
+  lineHeightScale: 1.6,
   innerHoverRadiusX: 20,
   innerHoverRadiusY: 3,
   outerHoverRadiusX: 11,
@@ -165,9 +152,7 @@ if (import.meta.env.DEV) {
   gui.add(params, 'innerHoverRadiusY', 0, 20, 1).name('Inner Hover Y')
   gui.add(params, 'outerHoverRadiusX', 0, 20, 1).name('Outer Hover X')
   gui.add(params, 'outerHoverRadiusY', 0, 20, 1).name('Outer Hover Y')
-  if (LANDMARK_MAP_RENDER_ENABLED) {
-    gui.add(params, 'landmarkImgWidthPx', 40, 200, 2).name('Landmark width (px)').onChange(renderFrame)
-  }
+  gui.add(params, 'landmarkImgWidthPx', 40, 200, 2).name('Landmark width (px)').onChange(renderFrame)
 }
 
 // ─── DOM Structure ────────────────────────────────────────────────────────────
@@ -176,10 +161,7 @@ const root = document.querySelector<HTMLDivElement>('#app')!
 
 const canvas = document.createElement('canvas')
 canvas.id = 'map-canvas'
-canvas.setAttribute(
-  'aria-label',
-  'Toronto cycling map filled with street names — scroll to zoom, drag to pan; use the year control for infrastructure year',
-)
+canvas.setAttribute('aria-label', 'Map of China filled with text — scroll to zoom, drag to pan')
 root.appendChild(canvas)
 const ctx = canvas.getContext('2d')!
 
@@ -295,7 +277,6 @@ canvas.addEventListener('pointerdown', (e) => {
   hoveredInner = null
   hoveredOuter = null
   hoveredLandmarkIdx = null
-  renderFrame()
 })
 
 canvas.addEventListener('pointermove', (e) => {
@@ -321,7 +302,7 @@ canvas.addEventListener('pointermove', (e) => {
     boxes.find(b => mx >= b.x && mx < b.x + b.w && my >= b.y && my < b.y + b.h)
   const ni = hitBox(innerBoxes) ?? null
   const no = hitBox(outerBoxes) ?? null
-  const lm = LANDMARK_MAP_RENDER_ENABLED ? hitTestLandmark(mx, my) : null
+  const lm = hitTestLandmark(mx, my)
   const wordChanged =
     ni?.wordIdx !== hoveredInner?.wordIdx || no?.wordIdx !== hoveredOuter?.wordIdx
   const lmChanged = lm !== hoveredLandmarkIdx
@@ -462,28 +443,18 @@ function renderFrame(): void {
     font: fontSpec,
     lineHeight,
     colors: theme.textOnSurface,
-    getWordColor: (wordIdx) => {
-      const row = STREET_SAMPLE[wordIdx % STREET_SAMPLE.length]
-      return colorForStreetAtYear(row, selectedYear, {
-        sh: theme.tierSh,
-        bl: theme.tierBl,
-        ct: theme.tierCt,
-      }, theme.uncoveredStreet)
-    },
     hoveredBox: hoveredInner ?? undefined,
     hoverRadiusX: params.innerHoverRadiusX,
     hoverRadiusY: params.innerHoverRadiusY,
     onWord: (b) => innerBoxes.push(b),
   })
 
-  if (LANDMARK_MAP_RENDER_ENABLED) {
-    for (const i of keepIdx) {
-      const r = tentativeRects[i]
-      ctx.drawImage(r.img, r.x, r.y, r.w, r.h)
-    }
+  for (const i of keepIdx) {
+    const r = tentativeRects[i]
+    ctx.drawImage(r.img, r.x, r.y, r.w, r.h)
   }
 
-  if (LANDMARK_MAP_RENDER_ENABLED && hoveredLandmarkIdx !== null) {
+  if (hoveredLandmarkIdx !== null) {
     const def = LANDMARK_DEFS[hoveredLandmarkIdx]
     const label = `${def.landmarkName}, ${def.cityName}`.toUpperCase()
     ctx.save()
@@ -511,37 +482,6 @@ function renderFrame(): void {
     ctx.fillText(label, bx + padX, by + padTop + lineHeight / 2)
     ctx.restore()
   }
-
-  updateLegendPanel()
-}
-
-// ─── Legend panel (HTML, same font as map) ───────────────────────────────────
-
-let legendTitleEl: HTMLHeadingElement | null = null
-let legendSubtitleEl: HTMLParagraphElement | null = null
-let legendRowPctEls: HTMLSpanElement[] = []
-let legendRowFillEls: HTMLDivElement[] = []
-
-function updateLegendPanel(): void {
-  if (!legendTitleEl || !legendSubtitleEl || legendRowPctEls.length !== 4 || legendRowFillEls.length !== 4) {
-    return
-  }
-  const n = STREET_SAMPLE.length
-  const hoodKey =
-    hoveredInner !== null
-      ? STREET_SAMPLE[hoveredInner.wordIdx % n].neighbourhoodKey
-      : null
-  const breakdown = computeTierPercents(hoodKey, selectedYear)
-  legendTitleEl.textContent = hoodKey !== null ? (NEIGHBOURHOOD_LABELS[hoodKey] ?? hoodKey) : 'Toronto'
-  legendSubtitleEl.textContent = `Bike infrastructure in ${selectedYear}`
-  const pcts = [breakdown.none, breakdown.sh, breakdown.bl, breakdown.ct]
-  const fills = legendRowFillEls
-  const pels = legendRowPctEls
-  for (let i = 0; i < 4; i++) {
-    const p = pcts[i]
-    fills[i].style.width = `${p}%`
-    pels[i].textContent = `${p}%`
-  }
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
@@ -552,126 +492,32 @@ async function init(): Promise<void> {
 
   await document.fonts.load(initialFontSpec)
 
-  mask = await loadPngMask('/map-alpha.png')
+  const [loadedMask, ...loadedImgs] = await Promise.all([
+    loadPngMask('/map-alpha.png'),
+    ...LANDMARK_DEFS.map(def => new Promise<HTMLImageElement>((res, rej) => {
+      const el = new Image()
+      el.onload = () => res(el)
+      el.onerror = rej
+      el.src = def.path
+    })),
+  ])
 
-  if (LANDMARK_MAP_RENDER_ENABLED) {
-    const loadedImgs = await Promise.all(
-      LANDMARK_DEFS.map(def => new Promise<HTMLImageElement>((res, rej) => {
-        const el = new Image()
-        el.onload = () => res(el)
-        el.onerror = rej
-        el.src = def.path
-      })),
-    )
-    landmarkImgs = loadedImgs
-    landmarkMasks = loadedImgs.map(img => {
-      const off = document.createElement('canvas')
-      off.width = img.naturalWidth
-      off.height = img.naturalHeight
-      const octx = off.getContext('2d')!
-      octx.drawImage(img, 0, 0)
-      const { data } = octx.getImageData(0, 0, img.naturalWidth, img.naturalHeight)
-      return { data, imgW: img.naturalWidth, imgH: img.naturalHeight }
-    })
-    landmarks = LANDMARK_DEFS.map(def => ({
-      nx: (def.lon - minLon) / (maxLon - minLon),
-      ny: (maxLat - def.lat) / (maxLat - minLat),
-    }))
-    landmarkPriority = LANDMARK_DEFS.map(() => Math.random())
-  } else {
-    landmarkImgs = []
-    landmarkMasks = []
-    landmarks = []
-    landmarkPriority = []
-  }
-
-  const yearBar = document.createElement('div')
-  yearBar.className = 'year-bar'
-  const yearLabel = document.createElement('label')
-  yearLabel.className = 'year-bar__label'
-  const yearTitle = document.createElement('span')
-  yearTitle.className = 'year-bar__title'
-  yearTitle.textContent = 'Infrastructure year'
-  const yearInput = document.createElement('input')
-  yearInput.type = 'range'
-  yearInput.min = '2001'
-  yearInput.max = '2025'
-  yearInput.step = '1'
-  yearInput.value = String(selectedYear)
-  yearInput.setAttribute('aria-valuemin', '2001')
-  yearInput.setAttribute('aria-valuemax', '2025')
-  const yearValue = document.createElement('span')
-  yearValue.className = 'year-bar__value'
-  yearValue.textContent = String(selectedYear)
-  yearInput.addEventListener('input', () => {
-    selectedYear = Number(yearInput.value)
-    yearValue.textContent = String(selectedYear)
-    renderFrame()
+  mask = loadedMask
+  landmarkImgs = loadedImgs
+  landmarkMasks = loadedImgs.map(img => {
+    const off = document.createElement('canvas')
+    off.width = img.naturalWidth
+    off.height = img.naturalHeight
+    const octx = off.getContext('2d')!
+    octx.drawImage(img, 0, 0)
+    const { data } = octx.getImageData(0, 0, img.naturalWidth, img.naturalHeight)
+    return { data, imgW: img.naturalWidth, imgH: img.naturalHeight }
   })
-  yearLabel.appendChild(yearTitle)
-  yearLabel.appendChild(yearInput)
-  yearBar.appendChild(yearLabel)
-  yearBar.appendChild(yearValue)
-  root.appendChild(yearBar)
-
-  const legend = document.createElement('aside')
-  legend.className = 'map-legend'
-  legend.setAttribute('aria-label', 'Cycling infrastructure by tier')
-  const legendHeader = document.createElement('div')
-  legendHeader.className = 'map-legend__header'
-  legendTitleEl = document.createElement('h2')
-  legendTitleEl.className = 'map-legend__title'
-  legendSubtitleEl = document.createElement('p')
-  legendSubtitleEl.className = 'map-legend__subtitle'
-  legendHeader.appendChild(legendTitleEl)
-  legendHeader.appendChild(legendSubtitleEl)
-  const legendRows = document.createElement('div')
-  legendRows.className = 'map-legend__rows'
-  legendRows.setAttribute('aria-live', 'polite')
-  legendRows.setAttribute('aria-atomic', 'true')
-  legendRowPctEls = []
-  legendRowFillEls = []
-  for (const spec of LEGEND_TIER_ROWS) {
-    const row = document.createElement('div')
-    row.className = `map-legend__row map-legend__row--${spec.mod}`
-    const labelHit = document.createElement('button')
-    labelHit.type = 'button'
-    labelHit.className = 'map-legend__label-hit'
-    labelHit.dataset.tooltip = spec.description
-    labelHit.setAttribute(
-      'aria-label',
-      `${spec.fullName}. ${spec.description}`,
-    )
-    const swatch = document.createElement('span')
-    swatch.className = 'map-legend__swatch'
-    swatch.setAttribute('aria-hidden', 'true')
-    const labelText = document.createElement('span')
-    labelText.className = 'map-legend__label-text'
-    const fullNameEl = document.createElement('span')
-    fullNameEl.className = 'map-legend__fullname'
-    fullNameEl.textContent = spec.fullName
-    labelText.appendChild(fullNameEl)
-    labelHit.appendChild(swatch)
-    labelHit.appendChild(labelText)
-    const track = document.createElement('div')
-    track.className = 'map-legend__track'
-    const fill = document.createElement('div')
-    fill.className = 'map-legend__fill'
-    fill.style.width = '0%'
-    track.appendChild(fill)
-    const pctEl = document.createElement('span')
-    pctEl.className = 'map-legend__pct'
-    pctEl.textContent = '0%'
-    row.appendChild(labelHit)
-    row.appendChild(track)
-    row.appendChild(pctEl)
-    legendRows.appendChild(row)
-    legendRowFillEls.push(fill)
-    legendRowPctEls.push(pctEl)
-  }
-  legend.appendChild(legendHeader)
-  legend.appendChild(legendRows)
-  root.appendChild(legend)
+  landmarks = LANDMARK_DEFS.map(def => ({
+    nx: (def.lon - minLon) / (maxLon - minLon),
+    ny: (maxLat - def.lat) / (maxLat - minLat),
+  }))
+  landmarkPriority = LANDMARK_DEFS.map(() => Math.random())
 
   renderFrame()
   window.addEventListener('resize', renderFrame)
